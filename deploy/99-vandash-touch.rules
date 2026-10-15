@@ -1,0 +1,7 @@
+# /etc/udev/rules.d/99-vandash-touch.rules
+# The 7" DSI panel's Goodix touch digitizer is mounted 180° from its display,
+# so taps land at the diagonally-opposite point ("upper-left clicks lower-
+# right"). Correct it with a 180° libinput calibration matrix — this is applied
+# in the device's own frame, independent of labwc's display rotation, so it
+# holds regardless of which transform the panel is set to.
+ACTION=="add|change", KERNEL=="event*", ATTRS{name}=="Goodix Capacitive TouchScreen", ENV{LIBINPUT_CALIBRATION_MATRIX}="0 -1 1 1 0 0"

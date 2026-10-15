@@ -1,0 +1,9 @@
+[Unit]
+Description=Update VanDash from GitLab main
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/home/pi/.ssh/vandash_deploy
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/van-dashboard-update

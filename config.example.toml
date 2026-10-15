@@ -1,0 +1,69 @@
+# Copy to config.toml and fill in your devices. config.toml is machine-local
+# and should not be committed.
+
+[server]
+host = "0.0.0.0"
+port = 8080
+default_view = "sky"   # sky | flow | day
+wake_hour = 7          # the sleep button wakes the display at this local hour
+
+[collector]
+# Ignore adverts weaker than this (dBm). Your own devices will sit well above
+# it; a neighbour's Victron gear can otherwise slip garbage through the
+# unauthenticated decrypt on a key-check collision.
+min_rssi = -85
+#adapter = ""          # e.g. "hci1" to pin scanning to a USB Bluetooth dongle
+
+[history]
+bucket_seconds = 30
+retain_hours = 8
+db = "data/vandash.db"
+
+# Diesel heater controller (WebSocket JSON on port 81). `ble = true` falls
+# back to its BLE UART when Wi-Fi data goes stale.
+[afterburner]
+host = "heater.lan"
+port = 81
+wifi = false
+ble = true
+
+# Battery with a JBD BMS polled over GATT (optional).
+#[epoch]
+#name = "Battery"
+#address = "00:11:22:33:44:55"
+#poll_minutes = 5
+
+# Victron devices. kind: solar | dcdc | shunt | ac.
+# key: VictronConnect > device > settings > product info > "Instant readout
+# via Bluetooth" encryption key.
+[[devices]]
+name = "Solar"
+kind = "solar"
+key = "00112233445566778899aabbccddeeff"
+
+[[devices]]
+name = "DC-DC"
+kind = "dcdc"
+key = "00112233445566778899aabbccddeeff"
+
+# Starlink Mini on a Shelly 1 Gen4 relay. Policy in vandash/starlink.py.
+#[starlink]
+#host = "192.0.2.40"
+#channel = 0
+#mode = "auto"            # auto | on | off
+#soc_low = 50             # below this: cut the dish, open a sync window each period
+#soc_restore = 60         # at/above this: back to always-on (hysteresis)
+#period_minutes = 60
+#window_minutes = 10
+#soc_max_age_minutes = 30
+#tick_seconds = 60
+
+# On the Pi: push state to an always-on mirror while the internet is up.
+#[uplink]
+#url = "https://van.example.net/api/ingest"
+#token = "CHANGE_ME"
+#interval_seconds = 30
+
+# On the mirror host: receive pushes, no radios, no kiosk.
+#[mirror]
+#token = "CHANGE_ME"

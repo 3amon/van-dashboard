@@ -1,0 +1,38 @@
+# /etc/systemd/system/kiosk.service
+# Fullscreen Chromium on the DSI panel via labwc (a lightweight Wayland
+# compositor) — no desktop. labwc handles output rotation + touch transform;
+# the browser + rotation live in ~/.config/labwc/autostart. Owns tty1 — getty@tty1
+# and autovt@tty1 must be MASKED (setup.sh does this) so the console getty never
+# grabs the VT; a Conflicts= here loses the boot transaction to the default getty.
+[Unit]
+Description=Van dashboard kiosk (labwc + Chromium)
+After=van-dashboard.service van-touch.service systemd-user-sessions.service seatd.service
+Wants=van-dashboard.service van-touch.service
+
+[Service]
+User=pi
+# A login session gives cage seat + DRM access (logind) and sets XDG_RUNTIME_DIR.
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=XDG_SESSION_TYPE=wayland
+# Wait until the dashboard answers before launching the browser.
+ExecStartPre=/bin/sh -c 'until curl -sf http://localhost:8080/api/state >/dev/null; do sleep 1; done'
+ExecStart=/usr/bin/labwc
+Restart=always
+RestartSec=3
+# On stop, kill the autostart respawn loop FIRST (else it keeps relaunching
+# Chromium), then Chromium and labwc. PAMName=login runs these in a logind
+# session scope that can outlive the service cgroup, so clean up explicitly to
+# avoid orphaned/duplicate instances across restarts.
+ExecStopPost=-/usr/bin/pkill -9 -u pi -f "sh /home/pi/.config/labwc/autostart"
+ExecStopPost=-/usr/bin/pkill -9 -u pi -x chromium
+ExecStopPost=-/usr/bin/pkill -9 -u pi -x labwc
+
+[Install]
+WantedBy=multi-user.target

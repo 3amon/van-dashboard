@@ -1,0 +1,19 @@
+# /etc/systemd/system/van-touch.service
+# Works around the boot-time Goodix probe race on the 7" DSI panel: the driver
+# probes before the panel powers its I2C rail and fails with -121, so we rebind
+# once the panel is up. See deploy/van-touch-rebind.sh.
+[Unit]
+Description=Rebind Goodix DSI touch after panel power-up
+# NB: do NOT add After=multi-user.target here — combined with WantedBy below it
+# forms an ordering cycle that systemd breaks by dropping this unit (and kiosk,
+# which waits on it, then starts without touch). It is pulled in by kiosk's
+# Wants=/After= and by multi-user.target; the rebind script retries so it does
+# not matter that this may run before the DSI panel has finished powering.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/van-touch-rebind.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

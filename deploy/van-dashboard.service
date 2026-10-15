@@ -1,0 +1,16 @@
+# /etc/systemd/system/van-dashboard.service
+[Unit]
+Description=Van power dashboard (BLE collector + web server)
+After=bluetooth.target network.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/van-dashboard
+ExecStart=/home/pi/.local/bin/uv run python -m vandash
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

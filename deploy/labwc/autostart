@@ -1,0 +1,28 @@
+#!/bin/sh
+# labwc autostart — van dashboard kiosk.
+#
+# Rotate the DSI panel to landscape. Under labwc the same transform is applied
+# to touch input, so taps stay aligned. Flip 270 <-> 90 if rotation is wrong.
+wlr-randr --output DSI-2 --transform 90
+
+# Dedicated Chromium profile. An unclean exit (a kiosk restart SIGKILLs the
+# browser) otherwise leaves a stale SingletonLock; the next launch then thinks
+# another instance is running, hands off and exits instantly — turning the
+# respawn loop below into a white-flicker crash loop that piles up orphans.
+# We clear the lock each iteration so Chromium always runs as the primary and
+# the loop only re-runs on a genuine crash.
+PROFILE="$HOME/.cache/kiosk-chromium"
+mkdir -p "$PROFILE"
+
+while true; do
+  rm -f "$PROFILE"/Singleton* 2>/dev/null
+  chromium \
+    --kiosk --ozone-platform=wayland --enable-features=UseOzonePlatform \
+    --user-data-dir="$PROFILE" \
+    --no-first-run --no-default-browser-check \
+    --noerrdialogs --disable-infobars --disable-session-crashed-bubble \
+    --disable-features=Translate --check-for-update-interval=31536000 \
+    --overscroll-history-navigation=0 \
+    http://localhost:8080/?kiosk
+  sleep 5
+done

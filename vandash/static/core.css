@@ -1,0 +1,282 @@
+/* Shared base — dark kiosk theme (reference dataviz palette, dark column) */
+:root {
+  --page:        #0d0d0d;
+  --surface:     #1a1a19;
+  --ink:         #ffffff;
+  --ink-2:       #c3c2b7;
+  --muted:       #898781;
+  --grid:        #2c2c2a;
+  --baseline:    #383835;
+  --border:      rgba(255,255,255,0.10);
+  --series:      #3987e5;   /* categorical slot 1, dark step */
+  --sun:         #c98500;   /* categorical slot 3 (yellow), dark step */
+  --flame:       #d95926;   /* categorical slot 8 (orange), dark step */
+  --alt:         #9a6bd8;   /* alternator charge line (violet) */
+  --shore:       #17a398;   /* shore-charger line (teal) */
+  --good:        #0ca30c;
+  --warning:     #fab219;
+  --critical:    #d03b3b;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+/* Kiosk touchscreen: a stray two-finger pinch is desktop-Chromium page zoom,
+   which PERSISTS in the profile — the panel stays "way zoomed in" until the
+   profile is reset. pan-x pan-y lets taps/pans through but eats pinch and
+   double-tap zoom before the browser can act on them. */
+html { touch-action: pan-x pan-y; }
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(10px, 1.5vw, 24px);
+  gap: clamp(10px, 1.2vw, 20px);
+  overflow: hidden;
+}
+
+header { display: flex; align-items: baseline; gap: 16px; }
+header h1 { flex: none; white-space: nowrap; font-size: clamp(19px, 1.9vw, 26px); font-weight: 700; }
+#status { font-size: clamp(13px, 1.2vw, 16px); color: var(--muted); }
+#status.err { color: var(--critical); }
+#status.demo { color: var(--warning); }
+#status.connections {
+  display: flex; align-items: center; gap: clamp(8px, 1vw, 14px); min-width: 0; overflow: hidden;
+}
+.connection { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.connection i { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+.connection.green i { background: var(--good); }
+.connection.yellow i { background: var(--warning); }
+.connection.red i { background: var(--critical); }
+#clock { margin-left: auto; font-size: clamp(20px, 2vw, 30px); font-weight: 600; color: var(--ink-2); }
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: clamp(10px, 1.2vw, 20px);
+}
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: clamp(12px, 1.4vw, 22px);
+  display: flex; flex-direction: column; gap: 6px;
+  min-height: 0;
+}
+.tile.stale { opacity: 0.45; }
+
+/* Rack views (classic/sky): a fixed column layout so the tile row NEVER
+   reflows or wraps on the 1280x720 panel. */
+.rack-tiles {
+  /* 6 tiles must fit one row on the 1280px DSI panel. Kept deliberately
+     narrow (battery 1.2fr, tight gap) so the row never overflows and clips
+     the Pi-health tile. */
+  grid-template-columns: minmax(0, 1.2fr) repeat(5, minmax(0, 1fr));
+  gap: clamp(6px, 0.5vw, 9px);
+}
+.rack-tiles > .tile { min-width: 0; overflow: hidden; }
+@media (max-width: 720px) {  /* phone/portrait fallback — keep it usable */
+  .rack-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rack-tiles #tile-batt { grid-column: 1 / -1; }
+}
+.tile .label { font-size: clamp(15px, 1.55vw, 21px); font-weight: 600; color: var(--ink); letter-spacing: 0.01em; }
+.tile .value { font-size: clamp(34px, 4vw, 56px); font-weight: 700; line-height: 1.05; }
+.rack-tiles .tile:not(#tile-batt) .value {
+  min-height: clamp(48px, 4.7vw, 64px); display: flex; align-items: baseline;
+  font-size: clamp(30px, 3.4vw, 46px);
+}
+#tile-batt .value { font-size: clamp(46px, 5.5vw, 78px); }
+#tile-yield .value {
+  font-size: clamp(30px, 3.25vw, 46px); white-space: nowrap; letter-spacing: -0.02em;
+}
+#tile-yield .value .unit { font-size: 0.42em; }
+#tile-yield .sub { font-size: clamp(13px, 1.15vw, 16px); white-space: nowrap; }
+#tile-pi .badge { font-size: clamp(12px, 1.1vw, 15px); gap: 5px; white-space: nowrap; }
+#tile-batt { touch-action: pan-x pan-y; position: relative; }
+.battery-sparkline {
+  position: absolute; left: 18px; right: 18px; bottom: 5px;
+  width: calc(100% - 36px); height: 12px; overflow: visible; opacity: 0.48;
+}
+#tile-batt.battery-high {
+  border-color: rgba(12, 163, 12, 0.62);
+  background: linear-gradient(135deg, rgba(12, 163, 12, 0.18), var(--surface) 68%);
+}
+#tile-batt.battery-low {
+  border-color: rgba(250, 178, 25, 0.72);
+  background: linear-gradient(135deg, rgba(250, 178, 25, 0.2), var(--surface) 68%);
+}
+#tile-batt.battery-critical {
+  border-color: rgba(208, 59, 59, 0.82);
+  background: linear-gradient(135deg, rgba(208, 59, 59, 0.25), var(--surface) 68%);
+}
+.tile .value .unit {
+  font-size: 0.5em; font-weight: 600; color: var(--ink-2); margin-left: 4px; vertical-align: 0.08em;
+}
+.tile .sub { font-size: clamp(14px, 1.35vw, 18px); font-weight: 600; line-height: 1.2; color: var(--ink-2); }
+.badge { display: inline-flex; align-items: center; gap: 7px; font-size: clamp(14px, 1.35vw, 18px); font-weight: 600; line-height: 1.2; color: var(--ink-2); }
+.badge .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--muted); flex: none; }
+.badge.good .dot { background: var(--good); }
+.badge.warning .dot { background: var(--warning); }
+.badge.critical .dot { background: var(--critical); }
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: clamp(12px, 1.4vw, 22px);
+  flex: 1;
+  display: flex; flex-direction: column; gap: 4px;
+  min-height: 0;
+  position: relative;
+}
+.chart-head { display: flex; align-items: baseline; gap: 14px; }
+.chart-head .label { font-size: clamp(15px, 1.55vw, 21px); font-weight: 600; color: var(--ink); }
+/* Live-chart legend: a row of line-colored icons, no words. */
+.chart-head .legend { display: flex; align-items: center; gap: clamp(8px, 1vw, 14px); }
+.chart-head .legend svg {
+  display: block;
+  width: clamp(17px, 1.8vw, 23px); height: clamp(17px, 1.8vw, 23px);
+}
+.hero { font-size: clamp(46px, 5.4vw, 80px); font-weight: 700; line-height: 1.0; }
+.hero .unit { font-size: 0.45em; font-weight: 500; color: var(--ink-2); }
+.chart-wrap { flex: 1; min-height: 0; position: relative; }
+.chart-wrap svg { width: 100%; height: 100%; display: block; cursor: crosshair; }
+.chart-slide.hidden { display: none; }
+.chart-nav {
+  position: absolute; top: 52%; z-index: 4; width: 54px; height: 76px;
+  border: 1px solid var(--border); border-radius: 12px; color: var(--ink-2);
+  background: rgba(8, 8, 10, 0.72); font-size: 52px; line-height: 60px;
+  touch-action: pan-x pan-y; opacity: 1; transition: opacity 0.8s ease;
+}
+.chart-nav.faded { opacity: 0; }
+.chart-nav.nav-hidden { display: none; }
+.chart-prev { left: 8px; }
+.chart-next { right: 8px; }
+.battery-details {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  gap: clamp(7px, 0.8vw, 11px); padding: 0 2px 12px;
+}
+.battery-details.hidden { display: none; }
+.chart-card.battery-details-open .chart-head,
+.chart-card.battery-details-open details.readings { display: none; }
+body.battery-details-open .switcher { display: none; }
+.battery-details-head { display: flex; align-items: center; justify-content: space-between; flex: 0 0 52px; min-height: 0; }
+.battery-details-head > div { display: flex; align-items: baseline; gap: 12px; }
+.battery-details-head .label { color: var(--good); font-size: clamp(15px, 1.55vw, 21px); font-weight: 600; }
+.battery-details-soc { color: var(--ink); font-size: clamp(30px, 3.5vw, 48px); font-weight: 700; line-height: 0.95; }
+.battery-details-soc .unit { color: var(--ink-2); font-size: 0.5em; margin-left: 2px; }
+.battery-details-close {
+  min-width: 118px; min-height: 54px; padding: 0 18px; border: 1px solid var(--muted);
+  border-radius: 999px; background: rgba(255, 255, 255, 0.05); color: var(--ink);
+  font: inherit; font-size: 19px; font-weight: 600; touch-action: pan-x pan-y;
+}
+.battery-details-close span { margin-left: 4px; }
+.battery-soc-history { flex: 0 0 clamp(42px, 8vh, 64px); min-height: 0; position: relative; }
+.battery-soc-history > span { color: var(--muted); font-size: 13px; position: absolute; left: 8px; top: 2px; }
+.battery-soc-history svg { width: 100%; height: 100%; overflow: visible; }
+.battery-detail-grid {
+  flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr)); gap: inherit;
+}
+.battery-detail {
+  border: 1px solid var(--border); border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025); padding: clamp(4px, 0.65vw, 9px);
+  min-width: 0; min-height: 0; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: center; gap: 3px;
+}
+.battery-detail span { color: var(--muted); font-size: clamp(12px, 1.15vw, 16px); }
+.battery-detail strong { color: var(--ink); font-size: clamp(16px, 1.65vw, 24px); line-height: 1; overflow-wrap: anywhere; }
+
+/* Kiosk mode (Pi panel loads ?kiosk, remembered in localStorage → html.kiosk):
+   hide the pointer entirely. A laptop never sets the flag, so it keeps its
+   cursor — the same build serves both. */
+html.kiosk, html.kiosk * { cursor: none !important; }
+.tooltip {
+  position: absolute; pointer-events: none; display: none;
+  background: var(--page); border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 10px; font-size: 13px; color: var(--ink-2); white-space: nowrap;
+  z-index: 5;
+}
+.tooltip b { color: var(--ink); }
+
+details.readings { font-size: clamp(11px, 1vw, 14px); color: var(--muted); }
+details.readings table { border-collapse: collapse; margin-top: 6px; }
+details.readings td, details.readings th {
+  text-align: left; padding: 2px 14px 2px 0;
+  font-variant-numeric: tabular-nums; font-weight: normal; color: var(--ink-2);
+}
+details.readings th { color: var(--muted); }
+
+/* Sky mode — daylight-cycle gradient behind translucent surfaces */
+body.sky {
+  background: linear-gradient(180deg, var(--sky-top, #0b1020), var(--sky-bottom, #0d0d0d));
+  transition: background 2s linear;
+}
+body.sky .tile,
+body.sky .chart-card,
+body.sky .switcher a { background: rgba(10, 10, 12, 0.52); }
+body.sky .tooltip { background: rgba(10, 10, 12, 0.9); }
+
+/* View switcher (bottom-right pills) — sized for fingers on the 7" panel */
+.switcher {
+  position: fixed; right: 14px; bottom: 12px; display: flex; gap: 8px; z-index: 10;
+}
+.switcher a {
+  color: var(--muted); text-decoration: none; font-size: 15px;
+  padding: 11px 20px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface);
+}
+.switcher a.active { color: var(--ink); border-color: var(--muted); }
+/* Screen-off (moon) pill, docked in the header to the right of the clock. */
+header .moon {
+  align-self: center; flex: none; margin-left: 14px; display: flex;
+  padding: 8px 13px; color: var(--ink-2);
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+}
+header .moon svg { display: block; width: clamp(20px, 2vw, 26px); height: clamp(20px, 2vw, 26px); }
+/* Starlink "stay on" pill, left of the moon. Hidden until the server reports
+   a relay; the mirror never shows it (nothing it could switch). */
+header .dish {
+  align-self: center; flex: none; margin-left: auto; white-space: nowrap;
+  padding: 8px 14px; font-size: 14px; color: var(--ink-2); text-decoration: none;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+}
+header .dish.held { color: var(--ink); border-color: var(--muted); }
+header .dish.off { color: var(--muted); border-style: dashed; }
+.mirror header .moon, .mirror header .dish { display: none; }
+
+/* Bedtime overlay — real darkness comes from the backlight; this swallows the
+   wake-up tap and stands in for dark on machines without a backlight. */
+#sleep-overlay {
+  position: fixed; inset: 0; z-index: 100; background: #000;
+  display: none; align-items: center; justify-content: center;
+}
+#sleep-overlay.on { display: flex; }
+#sleep-overlay .hint { opacity: 0.1; color: var(--ink); }
+#sleep-overlay .hint svg { display: block; width: 72px; height: 72px; }
+
+/* Phone fallback (the kiosk panel is 1280px wide, so this never fires there).
+   The kiosk layout pins body to the viewport with overflow: hidden so nothing
+   ever reflows on the 7" panel — on a phone that clips the page and kills
+   scrolling. Let the document grow and scroll normally, and give the flex: 1
+   regions (charts, flow deck, battery details) a real height so they don't
+   collapse once the body is no longer a fixed-height flex container. */
+@media (max-width: 900px) {
+  html, body { height: auto; min-height: 100%; }
+  #clock { white-space: nowrap; }
+  body { overflow: visible; overflow-x: hidden; padding-bottom: 84px; } /* room for the fixed switcher */
+  /* `body` prefix outranks the per-view `flex: 1; min-height: 0` rules that
+     load after this file (flow.html inline style). */
+  body .chart-card { flex: none; min-height: 62vh; }
+  body .deck { flex: none; min-height: 0; aspect-ratio: 1000 / 520; }  /* the flow deck's viewBox */
+  header { flex-wrap: wrap; }
+  header .hdr-stat { white-space: nowrap; }
+  /* Without a definite container height, `height: 100%` on the chart SVGs
+     resolves to auto (150px); absolute positioning fills the wrap instead. */
+  .chart-wrap svg, .deck svg { position: absolute; inset: 0; }
+  .battery-details { min-height: 70vh; }
+  .battery-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(4, minmax(0, 1fr));
+  }
+}

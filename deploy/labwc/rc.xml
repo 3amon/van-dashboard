@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<!-- Minimal labwc config for the kiosk: no gaps, no decorations (Chromium runs
+     fullscreen via --kiosk). The <touch> mapping binds the Goodix touchscreen
+     to the DSI output so labwc applies that output's rotation transform to
+     touch coordinates — without it, taps land off-screen on a rotated panel. -->
+<labwc_config>
+  <core>
+    <gap>0</gap>
+  </core>
+  <windowRules>
+    <windowRule identifier="*" serverDecoration="no"/>
+  </windowRules>
+  <!-- mouseEmulation="no": deliver real touch events (taps still click the UI)
+       but never move a pointer, so with no mouse attached labwc shows no cursor
+       at all — clean touch kiosk. -->
+  <touch deviceName="Goodix Capacitive TouchScreen" mapToOutput="DSI-2" mouseEmulation="no"/>
+</labwc_config>

@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodically check GitLab for VanDash updates
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+Unit=van-dashboard-update.service
+
+[Install]
+WantedBy=timers.target

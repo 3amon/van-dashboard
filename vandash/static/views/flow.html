@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Van Power · Flow</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/core.css">
+<style>
+  .deck { flex: 1; min-height: 0; position: relative; }
+  .deck svg { width: 100%; height: 100%; display: block; }
+  .node-card {
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    height: 100%;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    padding: 12px 14px; gap: 2px;
+  }
+  .node-card .name { font-size: 13px; color: var(--ink-2); }
+  .node-card .big { font-size: 34px; font-weight: 600; line-height: 1.05; }
+  .node-card .big .unit { font-size: 0.5em; font-weight: 500; color: var(--ink-2); }
+  .node-card .sub { font-size: 12px; color: var(--muted); }
+  .hdr-stat { margin-left: auto; font-size: clamp(12px, 1.1vw, 15px); color: var(--ink-2); }
+  .hdr-stat b { color: var(--ink); font-weight: 600; }
+  #clock { margin-left: 18px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Van Power</h1>
+    <span id="status">connecting…</span>
+    <span class="hdr-stat" id="yield-stat">&nbsp;</span>
+    <span id="clock"></span>
+  </header>
+
+  <div class="deck">
+    <svg id="deck" viewBox="0 0 1000 520" preserveAspectRatio="xMidYMid meet"
+         role="img" aria-label="Energy flow: solar and alternator into battery, battery to cabin"></svg>
+  </div>
+
+<script src="/static/core.js"></script>
+<script>
+"use strict";
+const { el, cssVar, fmt, degF, findDevice, isStale, battStatus, shortState } = VanDash;
+const svg = document.getElementById("deck");
+
+/* ---------- static scenery ---------- */
+const NODES = {
+  sun:     { x: 40,  y: 30,  w: 215, h: 130 },
+  shore:   { x: 40,  y: 195, w: 215, h: 130 },
+  alt:     { x: 40,  y: 360, w: 215, h: 130 },
+  battery: { x: 395, y: 180, w: 240, h: 165 },
+  cabin:   { x: 750, y: 180, w: 215, h: 165 },
+};
+const PATHS = {
+  solar:  { d: "M 255,95 C 330,95 335,210 395,232", color: "--sun" },
+  shore:  { d: "M 255,260 C 320,260 335,262 395,262", color: "--good" },
+  alt:    { d: "M 255,425 C 330,425 335,315 395,292", color: "--series" },
+  heater: { d: "M 635,262 C 680,262 705,262 750,262", color: "--flame" },
+};
+
+function nodeShell(key) {
+  const n = NODES[key];
+  const g = el("g", { id: "node-" + key });
+  g.append(el("rect", { x: n.x, y: n.y, width: n.w, height: n.h, rx: 12,
+    fill: cssVar("--surface"), stroke: cssVar("--border"), "stroke-width": 1 }));
+  const fo = el("foreignObject", { x: n.x, y: n.y, width: n.w, height: n.h });
+  const div = document.createElement("div");
+  div.className = "node-card";
+  div.id = "card-" + key;
+  fo.append(div);
+  g.append(fo);
+  svg.append(g);
+  return g;
+}
+
+/* icons drawn in the node's top-right corner */
+function sunIcon(g, n) {
+  const cx = n.x + n.w - 34, cy = n.y + 34;
+  const icon = el("g", { id: "icon-sun", stroke: cssVar("--sun"), "stroke-width": 2, "stroke-linecap": "round" });
+  icon.append(el("circle", { cx, cy, r: 9, fill: cssVar("--sun"), stroke: "none" }));
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    icon.append(el("line", {
+      x1: cx + Math.cos(a) * 13, y1: cy + Math.sin(a) * 13,
+      x2: cx + Math.cos(a) * 18, y2: cy + Math.sin(a) * 18 }));
+  }
+  g.append(icon);
+}
+function orionIcon(g, n) {
+  // the Orion constellation, of course
+  const ox = n.x + n.w - 58, oy = n.y + 16;
+  const s = [[4,4],[34,8],[13,20],[19,24],[25,28],[6,44],[36,40]]; // shoulders, belt, feet
+  const icon = el("g", { id: "icon-orion" });
+  const lines = [[0,2],[1,4],[2,3],[3,4],[2,5],[4,6]];
+  for (const [a, b] of lines)
+    icon.append(el("line", { x1: ox + s[a][0], y1: oy + s[a][1], x2: ox + s[b][0], y2: oy + s[b][1],
+      stroke: cssVar("--grid"), "stroke-width": 1 }));
+  s.forEach(([px, py], i) => icon.append(el("circle", {
+    cx: ox + px, cy: oy + py, r: i >= 2 && i <= 4 ? 2.6 : 2, fill: cssVar("--series") })));
+  g.append(icon);
+}
+function batteryIcon(g, n) {
+  const bx = n.x + n.w - 62, by = n.y + 20;
+  g.append(el("rect", { x: bx, y: by, width: 44, height: 22, rx: 4,
+    fill: "none", stroke: cssVar("--ink-2"), "stroke-width": 2 }));
+  g.append(el("rect", { x: bx + 46, y: by + 6, width: 5, height: 10, rx: 2, fill: cssVar("--ink-2") }));
+  g.append(el("rect", { id: "batt-fill", x: bx + 4, y: by + 4, width: 1, height: 14, rx: 2,
+    fill: cssVar("--good") }));
+}
+function plugIcon(g, n) {
+  // AC plug: two prongs into a rounded body
+  const px = n.x + n.w - 44, py = n.y + 16;
+  const icon = el("g", { stroke: cssVar("--good"), "stroke-width": 2,
+    "stroke-linecap": "round", fill: "none" });
+  icon.append(el("line", { x1: px + 8,  y1: py, x2: px + 8,  y2: py + 9 }));
+  icon.append(el("line", { x1: px + 18, y1: py, x2: px + 18, y2: py + 9 }));
+  icon.append(el("path", { d: `M ${px + 2},${py + 9} h 22 v 7 a 9,9 0 0 1 -9,9 h -4
+    a 9,9 0 0 1 -9,-9 Z` }));
+  icon.append(el("line", { x1: px + 13, y1: py + 25, x2: px + 13, y2: py + 32 }));
+  g.append(icon);
+}
+function flameIcon(g, n) {
+  const fx = n.x + n.w - 36, fy = n.y + 18;
+  g.append(el("path", { id: "icon-flame",
+    d: `M ${fx},${fy + 28} C ${fx - 10},${fy + 18} ${fx - 2},${fy + 8} ${fx},${fy}
+        C ${fx + 2},${fy + 10} ${fx + 12},${fy + 16} ${fx},${fy + 28} Z`,
+    fill: "none", stroke: cssVar("--muted"), "stroke-width": 2, "stroke-linejoin": "round" }));
+}
+
+/* wiring */
+const pathEls = {}, labelEls = {}, dotLayers = {};
+for (const [key, p] of Object.entries(PATHS)) {
+  svg.append(el("path", { d: p.d, fill: "none", stroke: cssVar("--grid"), "stroke-width": 2 }));
+  pathEls[key] = el("path", { d: p.d, fill: "none", stroke: cssVar(p.color),
+    "stroke-width": 2, opacity: 0 });
+  svg.append(pathEls[key]);
+  dotLayers[key] = el("g");
+  svg.append(dotLayers[key]);
+  const lab = el("text", { "text-anchor": "middle", fill: cssVar("--ink-2"), "font-size": 13 });
+  const pt = pathEls[key].getPointAtLength(pathEls[key].getTotalLength() / 2);
+  lab.setAttribute("x", pt.x);
+  lab.setAttribute("y", pt.y - 10);
+  labelEls[key] = lab;
+  svg.append(lab);
+}
+
+const gSun = nodeShell("sun"), gShore = nodeShell("shore"), gAlt = nodeShell("alt"),
+      gBatt = nodeShell("battery"), gCabin = nodeShell("cabin");
+sunIcon(gSun, NODES.sun);
+plugIcon(gShore, NODES.shore);
+orionIcon(gAlt, NODES.alt);
+batteryIcon(gBatt, NODES.battery);
+flameIcon(gCabin, NODES.cabin);
+
+/* ---------- animation ---------- */
+const flows = {};  // key -> {speed px/s, phase}
+for (const key of Object.keys(PATHS)) flows[key] = { speed: 0, phase: 0 };
+const SPACING = 46;
+let lastFrame = performance.now();
+function frame(now) {
+  const dt = Math.min((now - lastFrame) / 1000, 0.1);
+  lastFrame = now;
+  for (const [key, flow] of Object.entries(flows)) {
+    const path = pathEls[key], layer = dotLayers[key];
+    if (flow.speed <= 0) {
+      if (layer.firstChild) layer.replaceChildren();
+      continue;
+    }
+    const len = path.getTotalLength();
+    flow.phase = (flow.phase + flow.speed * dt) % SPACING;
+    const wanted = Math.ceil(len / SPACING);
+    while (layer.childElementCount < wanted)
+      layer.append(el("circle", { r: 3.5, fill: cssVar(PATHS[key].color),
+        stroke: cssVar("--page"), "stroke-width": 1.5 }));
+    while (layer.childElementCount > wanted) layer.lastChild.remove();
+    let i = 0;
+    for (const dot of layer.children) {
+      const pos = (flow.phase + i * SPACING) % len;
+      const pt = path.getPointAtLength(pos);
+      dot.setAttribute("cx", pt.x);
+      dot.setAttribute("cy", pt.y);
+      dot.setAttribute("opacity", pos < 12 || pos > len - 12 ? 0.3 : 1);
+      i++;
+    }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+function setFlow(key, active, speed, label) {
+  flows[key].speed = active ? speed : 0;
+  pathEls[key].setAttribute("opacity", active ? 0.45 : 0);
+  labelEls[key].textContent = active ? label : "";
+}
+
+/* ---------- render ---------- */
+const card = key => document.getElementById("card-" + key);
+function cardHTML(name, big, unit, sub) {
+  return `<div class="name">${name}</div>` +
+         `<div class="big">${big}<span class="unit">${unit}</span></div>` +
+         `<div class="sub">${sub}</div>`;
+}
+
+VanDash.onData(() => {
+  const solar = findDevice("solar");
+  const dcdc = findDevice("dcdc");
+  const heater = findDevice("heater");
+  const shunt = findDevice("shunt");
+  const ac = findDevice("ac");
+  const epoch = findDevice("battery");
+  const useShunt = shunt && !isStale(shunt);
+  const useEpoch = epoch && !isStale(epoch);
+
+  gSun.setAttribute("opacity", isStale(solar) ? 0.4 : 1);
+  gShore.setAttribute("opacity", ac && !isStale(ac) ? 1 : 0.4);
+  gAlt.setAttribute("opacity", isStale(dcdc) ? 0.4 : 1);
+  gBatt.setAttribute("opacity", (useShunt ? false : isStale(solar)) ? 0.4 : 1);
+  gCabin.setAttribute("opacity", isStale(heater) ? 0.4 : 1);
+
+  if (solar) {
+    const w = solar.solar_power ?? 0;
+    card("sun").innerHTML = cardHTML("Solar", Math.round(w), " W",
+      (solar.charge_state || "—").toLowerCase() + " · solar array");
+    setFlow("solar", w > 0.5, 14 + Math.min(w, 600) * 0.21, Math.round(w) + " W");
+
+    const wh = solar.yield_today;
+    document.getElementById("yield-stat").innerHTML = wh == null ? "" :
+      "yield today <b>" + (wh >= 1000 ? fmt(wh / 1000, 2) + " kWh" : Math.round(wh) + " Wh") + "</b>";
+  }
+
+  /* battery node: shunt SoC + Epoch BMS detail, MPPT voltage as fallback */
+  const fill = document.getElementById("batt-fill");
+  if (useShunt) {
+    const alarm = useEpoch && epoch.protection.length;
+    const detail = useEpoch
+      ? " · " + fmt(degF(epoch.temp), 0) + "°F · Δ" + (epoch.cell_delta_mv ?? "—") + "mV"
+      : "";
+    card("battery").innerHTML = cardHTML("Battery",
+      shunt.soc == null ? "—" : Math.round(shunt.soc), "%",
+      alarm ? '<span style="color:var(--critical)">⚠ ' + epoch.protection[0] + "</span>"
+            : fmt(shunt.voltage, 1) + " V · " + fmt(shunt.current, 1) + " A" + detail);
+    const frac = Math.max(0.05, Math.min(1, (shunt.soc ?? 50) / 100));
+    fill.setAttribute("width", 36 * frac);
+    fill.setAttribute("fill", cssVar(
+      alarm || shunt.soc < 15 ? "--critical" : shunt.soc < 35 ? "--warning" : "--good"));
+  } else if (solar) {
+    card("battery").innerHTML = cardHTML("Battery", fmt(solar.battery_voltage, 1), " V",
+      battStatus(solar.battery_voltage, solar.battery_charging_current)[1] + " · 230 Ah · 24 V");
+    const frac = Math.max(0.05, Math.min(1, (solar.battery_voltage - 24.0) / 2.8));
+    fill.setAttribute("width", 36 * frac);
+    const [level] = battStatus(solar.battery_voltage, solar.battery_charging_current);
+    fill.setAttribute("fill", cssVar(level === "critical" ? "--critical" : level === "warning" ? "--warning" : "--good"));
+  }
+
+  /* shore charger node: silent when unplugged (it stops advertising) */
+  if (ac && !isStale(ac)) {
+    const amps = ac.output_current1 ?? 0;
+    const err = ac.charger_error && ac.charger_error !== "No Error";
+    card("shore").innerHTML = cardHTML("Shore",
+      err ? "Error" : shortState(ac.charge_state) ?? "—", "",
+      err ? ac.charger_error
+          : fmt(amps, 1) + " A · " + fmt(ac.output_voltage1, 1) + " V · shore power");
+    setFlow("shore", !err && amps > 0.1, 20 + Math.min(amps, 16) * 4, fmt(amps, 1) + " A");
+  } else {
+    card("shore").innerHTML = cardHTML("Shore", "—", "", "unplugged");
+    setFlow("shore", false, 0, "");
+  }
+
+  if (dcdc) {
+    const running = dcdc.device_state && dcdc.device_state !== "Off";
+    const off = (dcdc.off_reason || []).filter(r => r !== "No input power");
+    card("alt").innerHTML = cardHTML("DC-DC", running ? shortState(dcdc.device_state) : "Off", "",
+      running
+        ? "in " + fmt(dcdc.input_voltage) + " V · out " + fmt(dcdc.output_voltage) + " V"
+        : (off.includes("Engine shutdown") ? "engine off" : "idle") +
+          " · starter " + fmt(dcdc.input_voltage) + " V");
+    setFlow("alt", running, 70, running ? dcdc.device_state.toLowerCase() : "");
+  }
+
+  if (heater) {
+    const running = heater.run_state > 0;
+    const err = heater.error_state > 1;
+    card("cabin").innerHTML = cardHTML("Cabin", fmt(degF(heater.cabin_temp), 0), " °F",
+      err ? "⚠ " + heater.error_string
+          : running ? (heater.run_string || "heating").toLowerCase() + " · set " + fmt(degF(heater.target_temp), 0) + "°"
+          : "heater off · " + Math.round(heater.humidity) + "% rh");
+    setFlow("heater", running && !err, 55, running ? "heating" : "");
+    document.getElementById("icon-flame").setAttribute("stroke",
+      err ? cssVar("--critical") : running ? cssVar("--flame") : cssVar("--muted"));
+  }
+});
+
+VanDash.startClock("clock");
+VanDash.injectSwitcher("flow");
+</script>
+</body>
+</html>

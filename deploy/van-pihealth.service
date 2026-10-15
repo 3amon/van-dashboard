@@ -1,0 +1,20 @@
+# /etc/systemd/system/van-pihealth.service
+# Monitors the Pi's OWN power (input voltage, draw, throttle/undervoltage
+# events). Deliberately uses the system python3 with no deps, so it keeps
+# logging even if the dashboard venv is broken or the kiosk has crashed.
+[Unit]
+Description=Van Pi power-health monitor (undervoltage/throttle/draw)
+After=multi-user.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/van-dashboard
+ExecStart=/usr/bin/python3 -m vandash.pihealth
+Restart=always
+RestartSec=10
+# Small footprint; it just polls vcgencmd every 15s.
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

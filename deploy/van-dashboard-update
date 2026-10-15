@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Fetch committed main into a cache, copy it into the live tree while preserving
+# machine-local state, refresh dependencies, and restart only after an update.
+set -euo pipefail
+
+DASH_USER=pi
+DASH_HOME=/home/pi
+LIVE="$DASH_HOME/van-dashboard"
+CACHE="$DASH_HOME/.cache/van-dashboard-update"
+MIRROR="$CACHE/repo.git"
+REVISION_FILE="$CACHE/deployed-revision"
+KEY="$DASH_HOME/.ssh/vandash_deploy"
+REMOTE=git@gitlab.example.net:you/van-dashboard.git
+
+as_dashboard_user() {
+  runuser -u "$DASH_USER" -- env \
+    HOME="$DASH_HOME" \
+    GIT_SSH_COMMAND="ssh -i $KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+    "$@"
+}
+
+install -d -o "$DASH_USER" -g "$DASH_USER" "$CACHE"
+if ! [ -d "$MIRROR" ]; then
+  as_dashboard_user git clone --mirror "$REMOTE" "$MIRROR"
+else
+  as_dashboard_user git --git-dir="$MIRROR" fetch --prune origin \
+    '+refs/heads/main:refs/heads/main'
+fi
+
+revision="$(git --git-dir="$MIRROR" rev-parse refs/heads/main)"
+if [ -f "$REVISION_FILE" ] && [ "$(cat "$REVISION_FILE")" = "$revision" ]; then
+  exit 0
+fi
+
+stage="$(mktemp -d "$CACHE/stage.XXXXXX")"
+trap 'rm -rf "$stage"' EXIT
+git --git-dir="$MIRROR" archive "$revision" | tar -x -C "$stage"
+
+# These paths belong to the machine, not to GitLab. In particular config.toml
+# contains device keys and site-specific addresses.
+rsync -a --delete --chown="$DASH_USER:$DASH_USER" \
+  --exclude='.git/' \
+  --exclude='.venv/' \
+  --exclude='config.toml' \
+  --exclude='data/' \
+  "$stage/" "$LIVE/"
+
+# Keep the installed updater and its units in sync too. This bootstrap step is
+# what lets future updater changes deploy themselves.
+for source in van-dashboard-update van-dashboard-update.service \
+              van-dashboard-update.timer; do
+  sed -e "s#/home/pi#$DASH_HOME#g" -e "s/\bpi\b/$DASH_USER/g" \
+    "$LIVE/deploy/$source" > "$stage/installed-$source"
+done
+install -m755 "$stage/installed-van-dashboard-update" \
+  /usr/local/sbin/van-dashboard-update
+install -m644 "$stage/installed-van-dashboard-update.service" \
+  /etc/systemd/system/van-dashboard-update.service
+install -m644 "$stage/installed-van-dashboard-update.timer" \
+  /etc/systemd/system/van-dashboard-update.timer
+systemctl daemon-reload
+as_dashboard_user "$DASH_HOME/.local/bin/uv" sync --project "$LIVE"
+systemctl restart van-dashboard.service
+systemctl is-active --quiet van-dashboard.service
+systemctl restart kiosk.service
+systemctl is-active --quiet kiosk.service
+printf '%s\n' "$revision" > "$REVISION_FILE"
+chown "$DASH_USER:$DASH_USER" "$REVISION_FILE"

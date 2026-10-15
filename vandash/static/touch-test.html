@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>touch test</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b0b0b;color:#eee;
+    font-family:system-ui,-apple-system,sans-serif;overflow:hidden;
+    touch-action:none;user-select:none}
+  .corner{position:fixed;font-size:4vw;font-weight:800;padding:2.2vh 2.2vw;opacity:.85}
+  .tl{top:0;left:0;color:#ffdd33}
+  .tr{top:0;right:0;color:#55ff77}
+  .bl{bottom:0;left:0;color:#55ddff}
+  .br{bottom:0;right:0;color:#ff66ff}
+  #info{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+    text-align:center;font-size:6.5vw;font-weight:800;line-height:1.25;
+    color:#fff;text-shadow:0 0 12px #000}
+  #sub{font-size:3vw;color:#aaa;font-weight:600}
+  #dot{position:fixed;width:70px;height:70px;margin:-35px 0 0 -35px;
+    border:5px solid #ff3131;border-radius:50%;
+    background:rgba(255,49,49,.25);pointer-events:none;display:none}
+  #dot::before,#dot::after{content:"";position:absolute;background:#ff3131}
+  #dot::before{left:32.5px;top:-30px;width:5px;height:130px}
+  #dot::after{top:32.5px;left:-30px;height:5px;width:130px}
+</style>
+</head>
+<body>
+  <div class="corner tl">TOP-LEFT</div>
+  <div class="corner tr">TOP-RIGHT</div>
+  <div class="corner bl">BOTTOM-LEFT</div>
+  <div class="corner br">BOTTOM-RIGHT</div>
+  <div id="info">TAP A CORNER<div id="sub">the crosshair shows where it registered</div></div>
+  <div id="dot"></div>
+<script>
+  var dot=document.getElementById('dot'),info=document.getElementById('info');
+  function at(x,y){
+    dot.style.left=x+'px'; dot.style.top=y+'px'; dot.style.display='block';
+    var fx=x/window.innerWidth, fy=y/window.innerHeight;
+    var vert=fy<0.5?'TOP':'BOTTOM', horz=fx<0.5?'LEFT':'RIGHT';
+    info.innerHTML='REGISTERED: '+vert+'-'+horz+
+      '<div id="sub">('+fx.toFixed(2)+', '+fy.toFixed(2)+')  &nbsp; screen '+
+      window.innerWidth+'x'+window.innerHeight+'</div>';
+  }
+  window.addEventListener('pointerdown',function(e){at(e.clientX,e.clientY);});
+  window.addEventListener('touchstart',function(e){
+    var t=e.touches[0]; if(t) at(t.clientX,t.clientY);
+  },{passive:true});
+</script>
+</body>
+</html>
